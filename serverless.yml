@@ -1,0 +1,69 @@
+service: graphqlApi
+plugins:
+  - serverless-dotenv-plugin
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  # versionFunctions: true
+  vpc:
+    securityGroupIds: 
+      - Fn::GetAtt: 
+        - 'VPC'
+        - 'DefaultSecurityGroup'
+    subnetIds: 
+      - Ref: 'PrivateSubnet1'
+      - Ref: 'PrivateSubnet2'
+  environment:
+    HASURA_ADMIN_SECRET: ${env:HASURA_ADMIN_SECRET}
+    DATABASE_USERNAME: ${env:DATABASE_USERNAME}
+    DATABASE_PASSWORD: ${env:DATABASE_PASSWORD}
+    COGNITO_CLIENT_ID:
+      Ref: UserPoolClient
+
+package:
+  individually: true
+  exclude:
+    - '*'
+    - '**/*'
+
+functions:
+  remote-schema:
+    handler: functions/remote-schema/index.handler
+    package:
+      include:
+        - functions/remote-schema/**
+    events:
+      - http:
+          path: remote-schema
+          method: post
+          cors: true
+      - http:
+          path: remote-schema
+          method: get
+          cors: true
+  event-triggers:
+    handler: functions/event-triggers/index.handler
+    package:
+      include:
+        - functions/event-triggers/**
+    events:
+      - http:
+          path: event-triggers
+          method: post
+          cors: true
+  pre-token-generation:
+    handler: functions/cognito-triggers/pre-token-generation.handler
+    package:
+      include:
+        - functions/cognito-triggers/pre-token-generation.js
+
+resources:
+  - ${file(resources/cognito.yml)}
+  - ${file(resources/vpc.yml)}
+  - ${file(resources/elb.yml)}
+  - ${file(resources/rds.yml)}
+  - ${file(resources/ecs.yml)}
+  - ${file(resources/cloudfront.yml)}

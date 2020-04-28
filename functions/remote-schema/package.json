@@ -1,0 +1,19 @@
+{
+  "name": "remote-schema",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "apollo-server-lambda": "^2.12.0",
+    "graphql": "^15.0.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.659.0"
+  }
+}

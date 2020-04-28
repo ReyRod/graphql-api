@@ -1,0 +1,60 @@
+Parameters:
+  HTTPPort:
+    Type: 'Number'
+    Default: 80
+  InternalHTTPPort:
+    Type: 'Number'
+    Default: 8080
+Resources:
+  HTTPSecurityGroup: 
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: '${self:service}-${self:provider.stage}-http-security-group'
+      VpcId:
+        Ref: 'VPC'
+      SecurityGroupIngress: 
+        - IpProtocol: 'tcp'
+          FromPort:
+            Ref: 'HTTPPort'
+          ToPort:
+            Ref: 'HTTPPort'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: 'tcp'
+          FromPort:
+            Ref: 'InternalHTTPPort'
+          ToPort:
+            Ref: 'InternalHTTPPort'
+          CidrIp: '0.0.0.0/0'
+  LoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: '${self:service}-${self:provider.stage}-load-balancer'
+      Subnets: 
+        - Ref: 'PublicSubnet1'
+        - Ref: 'PublicSubnet2'
+      SecurityGroups: 
+        - Ref: 'HTTPSecurityGroup'
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: '${self:service}-${self:provider.stage}-target-group'
+      HealthCheckEnabled: true
+      HealthCheckPath: '/healthz'
+      Port:
+        Ref: 'ContainerPort'
+      Protocol: 'HTTP'
+      TargetType: 'ip'
+      VpcId:
+        Ref: 'VPC'
+  Listener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      Port:
+        Ref: 'HTTPPort'
+      Protocol: 'HTTP'
+      LoadBalancerArn:
+        Ref: 'LoadBalancer'
+      DefaultActions: 
+        - Type: 'forward'
+          TargetGroupArn:
+            Ref: 'TargetGroup'

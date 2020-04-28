@@ -1,0 +1,178 @@
+Parameters:
+  ServiceDiscoveryTTL:
+    Type: 'Number'
+    Default: 60
+  ServiceDiscoveryNamespaceName:
+    Type: 'String'
+    Default: '${self:service}-${self:provider.stage}'
+  ContainerName:
+    Type: 'String'
+    Default: '${self:service}-${self:provider.stage}-container'
+  ContainerPort:
+    Type: 'Number'
+    Default: 8080
+  ContainerImage:
+    Type: 'String'
+    Default: 'registry.hub.docker.com/hasura/graphql-engine:v1.1.1'
+  DesiredCount:
+    Type: 'Number'
+    Default: 1
+  TaskCpu:
+    Type: 'Number'
+    Default: 512
+  TaskMemory:
+    Type: 'Number'
+    Default: 1024
+  AdminSecret:
+    Type: 'String'
+    Default: '${self:provider.environment.HASURA_ADMIN_SECRET}'
+  EnableConsole:
+    Type: 'String'
+    Default: 'true'
+  EnableTelemetry:
+    Type: 'String'
+    Default: 'false'
+  UnauthorizedRole:
+    Type: 'String'
+    Default: 'anonymous'
+Resources:
+  ExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'ECSExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service:
+                - 'ecs-tasks.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  LogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Properties:
+      LogGroupName: '/ecs/${self:service}-${self:provider.stage}'
+  Cluster:
+    Type: 'AWS::ECS::Cluster'
+    Properties:
+      ClusterName: '${self:service}-${self:provider.stage}-cluster'
+  TaskDefinition:
+    Type: 'AWS::ECS::TaskDefinition'
+    Properties:
+      ExecutionRoleArn:
+        Ref: 'ExecutionRole'
+      RequiresCompatibilities:
+        - 'FARGATE'
+      NetworkMode: 'awsvpc'
+      Family: '${self:service}-${self:provider.stage}-task-definition'
+      Cpu:
+        Ref: 'TaskCpu'
+      Memory:
+        Ref: 'TaskMemory'
+      ContainerDefinitions:
+        - Name:
+            Ref: 'ContainerName'
+          Image:
+            Ref: 'ContainerImage'
+          PortMappings:
+            - ContainerPort:
+                Ref: 'ContainerPort'
+          Environment:
+            - Name: 'HASURA_GRAPHQL_ADMIN_SECRET'
+              Value:
+                Ref: 'AdminSecret'
+            - Name: 'HASURA_GRAPHQL_ENABLE_CONSOLE'
+              Value:
+                Ref: 'EnableConsole'
+            - Name: 'HASURA_GRAPHQL_ENABLE_TELEMETRY'
+              Value:
+                Ref: 'EnableTelemetry'
+            - Name: 'HASURA_GRAPHQL_UNAUTHORIZED_ROLE'
+              Value:
+                Ref: 'UnauthorizedRole'
+            - Name: 'HASURA_GRAPHQL_DATABASE_URL'
+              Value:
+                Fn::Join:
+                  - ''
+                  - - 'postgres://'
+                    - '${self:provider.environment.DATABASE_USERNAME}'
+                    - ':'
+                    - '${self:provider.environment.DATABASE_PASSWORD}'
+                    - '@'
+                    - Fn::GetAtt: ['DB', 'Endpoint.Address']
+                    - '/'
+                    - Ref: 'DBName'
+            - Name: 'HASURA_GRAPHQL_JWT_SECRET'
+              Value:
+                Fn::Join:
+                  - ''
+                  - - '{"type":"RS256","jwk_url":"https://cognito-idp.'
+                    - '${self:provider.region}'
+                    - '.amazonaws.com/'
+                    - Ref: 'UserPool'
+                    - '/.well-known/jwks.json","claims_format":"stringified_json"}'
+            - Name: 'REMOTE_SCHEMA'
+              Value: { "Fn::Join" : ["", ["https://", { "Ref" : "ApiGatewayRestApi" }, ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}", "/remote-schema" ] ] }
+            - Name: 'EVENT_TRIGGER'
+              Value: { "Fn::Join" : ["", ["https://", { "Ref" : "ApiGatewayRestApi" }, ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}", "/event-triggers" ] ] }
+          LogConfiguration:
+            LogDriver: 'awslogs'
+            Options:
+              'awslogs-group':
+                Ref: 'LogGroup'
+              'awslogs-region': '${self:provider.region}'
+              'awslogs-stream-prefix': 'ecs'
+  ServiceDiscoveryNamespace:
+    Type: 'AWS::ServiceDiscovery::PrivateDnsNamespace'
+    Properties:
+      Name: '${self:service}-${self:provider.stage}'
+      Vpc:
+        Ref: 'VPC'
+  ServiceDiscovery:
+    Type: 'AWS::ServiceDiscovery::Service'
+    Properties:
+      NamespaceId:
+        Ref: 'ServiceDiscoveryNamespace'
+      Name: 'service'
+      DnsConfig:
+        DnsRecords:
+          - Type: 'A'
+            TTL:
+              Ref: 'ServiceDiscoveryTTL'
+  Service:
+    Type: 'AWS::ECS::Service'
+    DependsOn: 'Listener'
+    Properties:
+      ServiceName: '${self:service}-${self:provider.stage}-service'
+      LaunchType: 'FARGATE'
+      DesiredCount:
+        Ref: 'DesiredCount'
+      Cluster:
+        Ref: 'Cluster'
+      TaskDefinition:
+        Ref: 'TaskDefinition'
+      HealthCheckGracePeriodSeconds: 3600
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: 'ENABLED'
+          SecurityGroups:
+            - Fn::GetAtt: ['VPC', 'DefaultSecurityGroup']
+            - Ref: 'HTTPSecurityGroup'
+          Subnets:
+            - Ref: 'PublicSubnet1'
+            - Ref: 'PublicSubnet2'
+      LoadBalancers:
+        - TargetGroupArn:
+            Ref: 'TargetGroup'
+          ContainerName:
+            Ref: 'ContainerName'
+          ContainerPort:
+            Ref: 'ContainerPort'
+      ServiceRegistries:
+        - RegistryArn:
+            Fn::GetAtt: ['ServiceDiscovery', 'Arn']
+          ContainerName:
+            Ref: 'ContainerName'

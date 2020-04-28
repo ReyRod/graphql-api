@@ -1,0 +1,19 @@
+{
+  "name": "graphql_api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "clean": "rm -rf node_modules && cd functions/remote-schema && rm -rf node_modules",
+    "build": "npm i && cd functions/remote-schema && npm i && cd ../../",
+    "start": "npm run build && sls deploy"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "hasura-cli": "^1.1.1",
+    "serverless": "^1.67.3",
+    "serverless-dotenv-plugin": "^2.3.2"
+  }
+}

@@ -1,0 +1,38 @@
+Parameters:
+  ELBHTTPPort:
+    Type: 'Number'
+    Default: 80
+Resources:
+  Distribution:
+    Type: 'AWS::CloudFront::Distribution'
+    Properties:
+      DistributionConfig:
+        Comment: '${self:service}-${self:provider.stage}'
+        DefaultRootObject: ''
+        Enabled: true
+        IPV6Enabled: true
+        HttpVersion: 'http2'
+        Origins:
+          - Id: 'ecs'
+            DomainName: 
+              Fn::GetAtt: ['LoadBalancer', 'DNSName']
+            CustomOriginConfig: 
+              HTTPPort:
+                Ref: 'ELBHTTPPort'
+              OriginProtocolPolicy: 'http-only'
+              OriginSSLProtocols:
+                - 'TLSv1.2'
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - 'GET'
+            - 'HEAD'
+            - 'OPTIONS'
+            - 'PUT'
+            - 'PATCH'
+            - 'POST'
+            - 'DELETE'
+          Compress: true
+          ForwardedValues:
+            QueryString: true
+          TargetOriginId: 'ecs'
+          ViewerProtocolPolicy: 'redirect-to-https'

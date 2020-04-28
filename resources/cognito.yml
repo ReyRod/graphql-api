@@ -1,0 +1,34 @@
+Parameters:
+  RefreshTokenValidity:
+    Type: 'Number'
+    Default: 30
+Resources:
+  UserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: '${self:service}-${self:provider.stage}-user-pool'
+      UsernameAttributes:
+        - 'email'
+      AutoVerifiedAttributes:
+        - 'email'
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_LINK
+  UserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      ClientName: '${self:service}-${self:provider.stage}-user-pool-client'
+      UserPoolId:
+        Ref: 'UserPool'
+      ExplicitAuthFlows: 
+          - 'ALLOW_USER_PASSWORD_AUTH'
+          - 'ALLOW_REFRESH_TOKEN_AUTH'
+      PreventUserExistenceErrors: 'ENABLED'
+      SupportedIdentityProviders:
+        - 'COGNITO'
+  UserPoolDomain:
+    Type: 'AWS::Cognito::UserPoolDomain'
+    Properties:
+      UserPoolId:
+        Ref: UserPool
+      Domain: '${self:provider.stage}-domain'
+  

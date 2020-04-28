@@ -1,0 +1,58 @@
+Parameters:
+  DBUsername:
+    Type: 'String'
+    Default: '${self:provider.environment.DATABASE_USERNAME}'
+  DBPassword:
+    Type: 'String'
+    Default: '${self:provider.environment.DATABASE_PASSWORD}'
+  EngineVersion:
+    Type: 'String'
+    Default: '10.7'
+  DBPort:
+    Type: 'Number'
+    Default: 5432
+  DBName:
+    Type: 'String'
+    Default: '${self:service}'
+Resources:
+  DBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: '${self:service}-${self:provider.stage}-db-security-group'
+      VpcId:
+        Ref: 'VPC'
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort:
+            Ref: 'DBPort'
+          ToPort:
+            Ref: 'DBPort'
+          SourceSecurityGroupId:
+            Fn::GetAtt: ['VPC', 'DefaultSecurityGroup']
+  SubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'Private'
+      SubnetIds:
+        - Ref: 'PrivateSubnet1'
+        - Ref: 'PrivateSubnet2'
+  DB:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DBClusterIdentifier: '${self:service}-${self:provider.stage}-db'
+      DatabaseName:
+        Ref: 'DBName'
+      DBSubnetGroupName:
+        Ref: 'SubnetGroup'
+      Engine: 'aurora-postgresql'
+      EngineMode: 'serverless'
+      EngineVersion:
+        Ref: 'EngineVersion'
+      MasterUsername:
+        Ref: 'DBUsername'
+      MasterUserPassword:
+        Ref: 'DBPassword'
+      Port:
+        Ref: 'DBPort'
+      VpcSecurityGroupIds:
+        - Ref: 'DBSecurityGroup'
